@@ -1,0 +1,44 @@
+name: Deploy CloudFormation
+
+on:
+  workflow_dispatch:
+    inputs:
+      cluster:
+        description: 'ECS Cluster name'
+        required: true
+      subnets:
+        description: 'Comma-separated subnet ids'
+        required: true
+      security_groups:
+        description: 'Comma-separated security group ids'
+        required: true
+      image_uri:
+        description: 'Full ECR image URI (repo:tag)'
+        required: true
+      stack_name:
+        description: 'CloudFormation stack name'
+        required: true
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  AWS_REGION: ap-southeast-1
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout (needed for cloudformation.yml)
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials (via OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Deploy CloudFormation stack
+        run: |
+          aws cloudformation deploy                 --stack-name "${{ github.event.inputs.stack_name }}"                 --template-file cloudformation.yml                 --capabilities CAPABILITY_NAMED_IAM                 --parameter-overrides ClusterName="${{ github.event.inputs.cluster }}"                                       SubnetIds="${{ replace(github.event.inputs.subnets, ',', ' ') }}"                                       SecurityGroupIds="${{ replace(github.event.inputs.security_groups, ',', ' ') }}"                                       ImageUri="${{ github.event.inputs.image_uri }}"

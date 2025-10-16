@@ -1,0 +1,3 @@
+# requirements.txt
+# Add pip packages here if needed, e.g.
+# requests==2.31.0

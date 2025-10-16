@@ -1,0 +1,61 @@
+name: Destroy CloudFormation Stack
+
+on:
+  workflow_dispatch:
+    inputs:
+      stack_name:
+        description: 'Name of the CloudFormation stack to delete'
+        required: true
+      delete_ecr_repo:
+        description: 'Also delete the ECR repository (true/false)'
+        required: false
+        default: 'false'
+      ecr_repo_name:
+        description: 'ECR repository name (required if delete_ecr_repo=true)'
+        required: false
+      s3_bucket:
+        description: 'S3 bucket used for artifacts (optional cleanup)'
+        required: false
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  AWS_REGION: ap-southeast-1
+
+jobs:
+  destroy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Delete CloudFormation stack
+        run: |
+          STACK=${{ github.event.inputs.stack_name }}
+          echo "Deleting CloudFormation stack: ${STACK}"
+          aws cloudformation delete-stack --stack-name "${STACK}"
+          echo "Waiting for deletion to complete..."
+          aws cloudformation wait stack-delete-complete --stack-name "${STACK}"
+          echo "✅ Stack ${STACK} deleted successfully."
+
+      - name: Optionally delete ECR repository
+        if: ${{ github.event.inputs.delete_ecr_repo == 'true' }}
+        run: |
+          REPO=${{ github.event.inputs.ecr_repo_name }}
+          echo "Deleting ECR repo: ${REPO}"
+          aws ecr delete-repository --repository-name "${REPO}" --force
+          echo "✅ ECR repository ${REPO} deleted."
+
+      - name: Optionally clean up S3 bucket artifacts
+        if: ${{ github.event.inputs.s3_bucket != '' }}
+        run: |
+          BUCKET=${{ github.event.inputs.s3_bucket }}
+          echo "Cleaning up S3 bucket: ${BUCKET}"
+          aws s3 rm s3://${BUCKET}/artifacts/ --recursive || true
+          echo "✅ Cleaned up S3 artifacts."

@@ -1,0 +1,61 @@
+name: Build and Push Docker Image
+
+on:
+  push:
+    branches: [ main ]
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  AWS_REGION: ap-southeast-1
+  ECR_REPO: myapp-repo
+
+jobs:
+  docker:
+    runs-on: ubuntu-latest
+    outputs:
+      image_uri: ${{ steps.push.outputs.image_uri }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to ECR
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build, tag, and push image
+        id: push
+        run: |
+          AWS_ACCOUNT_ID=${{ secrets.AWS_ACCOUNT_ID }}
+          TIMESTAMP=$(date -u +%Y%m%d%H%M%S)
+          IMAGE_TAG=${TIMESTAMP}
+          FULL_URI="${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ECR_REPO}:${IMAGE_TAG}"
+
+          aws ecr describe-repositories --repository-names "${ECR_REPO}" ||               aws ecr create-repository --repository-name "${ECR_REPO}"
+
+          docker build -t "${ECR_REPO}:${IMAGE_TAG}" .
+          docker tag "${ECR_REPO}:${IMAGE_TAG}" "${FULL_URI}"
+          docker push "${FULL_URI}"
+
+          echo "image_uri=${FULL_URI}" >> $GITHUB_OUTPUT
+
+      - name: Upload image uri artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: image-uri
+          path: |
+            image_uri.txt
+        continue-on-error: true
+
+      - name: Save image uri to file
+        if: always()
+        run: |
+          echo "${{ steps.push.outputs.image_uri }}" > image_uri.txt

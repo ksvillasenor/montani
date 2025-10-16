@@ -1,0 +1,35 @@
+name: Build and Upload Artifact to S3
+
+on:
+  push:
+    branches: [ main ]
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  AWS_REGION: ap-southeast-1
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Create dist directory and package
+        run: |
+          mkdir -p dist
+          TIMESTAMP=$(date -u +%Y%m%d%H%M%S)
+          zip -r dist/myapp_${TIMESTAMP}.zip app.py requirements.txt Dockerfile cloudformation.yml
+
+      - name: Configure AWS credentials (via OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Upload artifacts to S3
+        run: |
+          aws s3 cp dist/ s3://${{ secrets.S3_BUCKET_NAME }}/artifacts/ --recursive
