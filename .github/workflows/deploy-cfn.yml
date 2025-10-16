@@ -41,4 +41,20 @@ jobs:
 
       - name: Deploy CloudFormation stack
         run: |
-          aws cloudformation deploy                 --stack-name "${{ github.event.inputs.stack_name }}"                 --template-file cloudformation.yml                 --capabilities CAPABILITY_NAMED_IAM                 --parameter-overrides ClusterName="${{ github.event.inputs.cluster }}"                                       SubnetIds="${{ replace(github.event.inputs.subnets, ',', ' ') }}"                                       SecurityGroupIds="${{ replace(github.event.inputs.security_groups, ',', ' ') }}"                                       ImageUri="${{ github.event.inputs.image_uri }}"
+          # Convert comma-separated subnets and security groups into space-separated lists
+          subnets=$(echo "${{ github.event.inputs.subnets }}" | tr ',' ' ')
+          security_groups=$(echo "${{ github.event.inputs.security_groups }}" | tr ',' ' ')
+
+          echo "Deploying stack ${{ github.event.inputs.stack_name }} using image ${{ github.event.inputs.image_uri }}"
+          echo "Using subnets: $subnets"
+          echo "Using security groups: $security_groups"
+
+          aws cloudformation deploy \
+            --stack-name "${{ github.event.inputs.stack_name }}" \
+            --template-file cloudformation.yml \
+            --capabilities CAPABILITY_NAMED_IAM \
+            --parameter-overrides \
+              ClusterName="${{ github.event.inputs.cluster }}" \
+              SubnetIds="$subnets" \
+              SecurityGroupIds="$security_groups" \
+              ImageUri="${{ github.event.inputs.image_uri }}"
