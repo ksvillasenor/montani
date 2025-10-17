@@ -1,15 +1,19 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Description: Deploy simple ECS Fargate task and schedule
+Description: Deploy a simple ECS Fargate task and schedule it hourly via EventBridge.
 
 Parameters:
   ClusterName:
     Type: String
+    Description: Name of the existing ECS cluster
   SubnetIds:
     Type: CommaDelimitedList
+    Description: Comma-separated list of subnet IDs
   SecurityGroupIds:
     Type: CommaDelimitedList
+    Description: Comma-separated list of security group IDs
   ImageUri:
     Type: String
+    Description: Full ECR image URI (repo:tag)
 
 Resources:
   MyAppLogGroup:
@@ -44,13 +48,13 @@ Resources:
       ContainerDefinitions:
         - Name: myapp
           Image: !Ref ImageUri
+          Essential: true
           LogConfiguration:
             LogDriver: awslogs
             Options:
               awslogs-group: !Sub "/ecs/${AWS::StackName}"
               awslogs-region: !Ref AWS::Region
               awslogs-stream-prefix: ecs
-          Essential: true
 
   MyAppEventRule:
     Type: AWS::Events::Rule
@@ -64,8 +68,19 @@ Resources:
           EcsParameters:
             TaskDefinitionArn: !Ref MyAppTaskDefinition
             LaunchType: FARGATE
-            NetworkConfiguration:
-              AwsvpcConfiguration:
-                Subnets: !Ref SubnetIds
-                SecurityGroups: !Ref SecurityGroupIds
-                AssignPublicIp: ENABLED
+          NetworkConfiguration:     # ✅ moved outside EcsParameters
+            AwsvpcConfiguration:
+              Subnets: !Ref SubnetIds
+              SecurityGroups: !Ref SecurityGroupIds
+              AssignPublicIp: ENABLED
+
+Outputs:
+  TaskDefinitionArn:
+    Description: ARN of the ECS task definition
+    Value: !Ref MyAppTaskDefinition
+  LogGroupName:
+    Description: CloudWatch LogGroup for the app
+    Value: !Sub "/ecs/${AWS::StackName}"
+  EventRuleName:
+    Description: Name of the EventBridge rule
+    Value: !Ref MyAppEventRule
