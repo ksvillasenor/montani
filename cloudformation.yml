@@ -1,38 +1,28 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Description: >
-  Deploy simple CLI app as an hourly scheduled ECS Fargate task.
-  Provide ECS Cluster name, subnets and security group(s) as parameters.
+Description: Deploy simple ECS Fargate task and schedule
 
 Parameters:
   ClusterName:
     Type: String
-    Description: Name of the existing ECS cluster
   SubnetIds:
-    Type: List<String>
-    Description: Subnet IDs for Fargate tasks (at least 1)
+    Type: CommaDelimitedList
   SecurityGroupIds:
-    Type: List<String>
-    Description: Security Group IDs for the task ENIs
+    Type: CommaDelimitedList
   ImageUri:
     Type: String
-    Description: Full ECR image URI (e.g. <acct>.dkr.ecr.region.amazonaws.com/repo:tag)
-  TaskCpu:
-    Type: String
-    Default: "256"
-    Description: CPU units (e.g. 256)
-  TaskMemory:
-    Type: String
-    Default: "512"
-    Description: Memory (MB) for the task (e.g. 512)
 
 Resources:
+  MyAppLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub "/ecs/${AWS::StackName}"
+      RetentionInDays: 7
 
-  TaskExecutionRole:
+  MyAppExecutionRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Sub "myapp-task-exec-role-${AWS::StackName}"
       AssumeRolePolicyDocument:
-        Version: "2012-10-17"
+        Version: 2012-10-17
         Statement:
           - Effect: Allow
             Principal:
@@ -44,76 +34,38 @@ Resources:
   MyAppTaskDefinition:
     Type: AWS::ECS::TaskDefinition
     Properties:
-      Family: myapp-task
-      Cpu: !Ref TaskCpu
-      Memory: !Ref TaskMemory
+      Family: !Sub "${AWS::StackName}-task"
+      Cpu: 256
+      Memory: 512
       NetworkMode: awsvpc
       RequiresCompatibilities:
         - FARGATE
-      ExecutionRoleArn: !GetAtt TaskExecutionRole.Arn
+      ExecutionRoleArn: !GetAtt MyAppExecutionRole.Arn
       ContainerDefinitions:
         - Name: myapp
           Image: !Ref ImageUri
-          Essential: true
-          EntryPoint: ["python", "app.py"]
           LogConfiguration:
             LogDriver: awslogs
             Options:
-              awslogs-group: !Sub "/ecs/myapp-${AWS::StackName}"
-              awslogs-region: !Ref "AWS::Region"
-              awslogs-stream-prefix: myapp
+              awslogs-group: !Sub "/ecs/${AWS::StackName}"
+              awslogs-region: !Ref AWS::Region
+              awslogs-stream-prefix: ecs
+          Essential: true
 
-  EventRoleForScheduler:
-    Type: AWS::IAM::Role
-    Properties:
-      RoleName: !Sub "myapp-event-role-${AWS::StackName}"
-      AssumeRolePolicyDocument:
-        Version: "2012-10-17"
-        Statement:
-          - Effect: Allow
-            Principal:
-              Service: events.amazonaws.com
-            Action: sts:AssumeRole
-      Policies:
-        - PolicyName: AllowRunTask
-          PolicyDocument:
-            Version: "2012-10-17"
-            Statement:
-              - Effect: Allow
-                Action:
-                  - ecs:RunTask
-                Resource: "*"
-              - Effect: Allow
-                Action:
-                  - iam:PassRole
-                Resource: "*"
-
-  ScheduledRule:
+  MyAppEventRule:
     Type: AWS::Events::Rule
     Properties:
-      Name: !Sub "myapp-hourly-rule-${AWS::StackName}"
-      Description: "Run the myapp Fargate task every hour"
-      ScheduleExpression: "cron(0 * * * ? *)"
+      ScheduleExpression: rate(1 hour)
       State: ENABLED
       Targets:
         - Arn: !Sub "arn:aws:ecs:${AWS::Region}:${AWS::AccountId}:cluster/${ClusterName}"
-          Id: "MyAppEcsTarget"
-          RoleArn: !GetAtt EventRoleForScheduler.Arn
+          Id: MyAppEcsTarget
+          RoleArn: !GetAtt MyAppExecutionRole.Arn
           EcsParameters:
             TaskDefinitionArn: !Ref MyAppTaskDefinition
             LaunchType: FARGATE
             NetworkConfiguration:
-              AwsVpcConfiguration:
-                AssignPublicIp: ENABLED
+              AwsvpcConfiguration:
                 Subnets: !Ref SubnetIds
                 SecurityGroups: !Ref SecurityGroupIds
-            PlatformVersion: LATEST
-
-Outputs:
-  TaskDefinitionArn:
-    Description: The ECS task definition ARN
-    Value: !Ref MyAppTaskDefinition
-
-  ScheduledRuleName:
-    Description: EventBridge rule name
-    Value: !Ref ScheduledRule
+                AssignPublicIp: ENABLED
