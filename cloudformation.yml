@@ -59,6 +59,7 @@ Resources:
   MyAppEventRule:
     Type: AWS::Events::Rule
     Properties:
+      Description: "Trigger the ECS Fargate task every hour"
       ScheduleExpression: rate(1 hour)
       State: ENABLED
       Targets:
@@ -68,11 +69,11 @@ Resources:
           EcsParameters:
             TaskDefinitionArn: !Ref MyAppTaskDefinition
             LaunchType: FARGATE
-          NetworkConfiguration:     # ✅ moved outside EcsParameters
-            AwsvpcConfiguration:
-              Subnets: !Ref SubnetIds
-              SecurityGroups: !Ref SecurityGroupIds
-              AssignPublicIp: ENABLED
+            NetworkConfiguration:            # ✅ Correct placement inside EcsParameters
+              AwsVpcConfiguration:           # ✅ Correct key name
+                Subnets: !Ref SubnetIds
+                SecurityGroups: !Ref SecurityGroupIds
+                AssignPublicIp: ENABLED
 
 Outputs:
   TaskDefinitionArn:
