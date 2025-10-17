@@ -69,8 +69,8 @@ Resources:
           EcsParameters:
             TaskDefinitionArn: !Ref MyAppTaskDefinition
             LaunchType: FARGATE
-            NetworkConfiguration:            # ✅ Correct placement inside EcsParameters
-              AwsVpcConfiguration:           # ✅ Correct key name
+            NetworkConfiguration:
+              AwsVpcConfiguration:
                 Subnets: !Ref SubnetIds
                 SecurityGroups: !Ref SecurityGroupIds
                 AssignPublicIp: ENABLED
